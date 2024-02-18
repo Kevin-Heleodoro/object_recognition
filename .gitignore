@@ -1,0 +1,32 @@
+# Compiled object files
+*.o
+*.obj
+
+# Compiled dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Executables
+bin/*.exe
+*.exec
+bin/*screen_capture.jpg
+bin/tested_.jpg
+bin/blur_*.jpg
+
+# Build directory
+build/
+
+# OpenCV build artifacts
+opencv/build/
+
+# IDE specific files
+.vscode/
+.idea/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+.DS_STORE
+
+# Other
+scratch/
