@@ -14,6 +14,7 @@ LDLIBS = $(shell pkg-config --libs opencv4)
 BINDIR = ./bin
 SRCDIR = ./src
 OBJDIR = ./obj
+INCDIR = ./include
 
 # Target exe
 TARGET = $(BINDIR)/obj_recog
@@ -35,17 +36,16 @@ $(TARGET): $(OBJS)
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CC) $(CXXFLAGS) -c $< -o $@ 
 
+# Include dependencies
+-include $(OBJS:.o=.d)
+
+# Generate dependencies
+$(OBJDIR)/%.d: $(SRCDIR)/%.cpp
+	$(CC) $(CXXFLAGS) -MM -MT $(@:.d=.o) $< > $@
+
+# Clean up
 clean:
 	rm -f $(OBJDIR)/*.o $(TARGET)
 
-
-# all: obj_recog testing
-
-# obj_recog: $(OBJDIR)/obj_recog.o
-# 	$(CC) $< -o $(BINDIR)/$@ $(LDLIBS)
-
-# testing: $(OBJDIR)/testing.o
-# 	$(CC) $< -o $(BINDIR)/$@ $(LDLIBS)
-
-# $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
-# 	$(CC) $(CXXFLAGS) -c $< -o $@
+# Phony targets - will run regardless of file existence
+.PHONY: clean
