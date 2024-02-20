@@ -55,6 +55,12 @@ Clean up the binary image:
 I will use the filling holes approach since the thresholded images seem to be displaying a lot of black spots.
 **What are the black spots?**
 
+-   https://towardsdatascience.com/image-processing-class-egbe443-6-morphological-filter-e952c1ec886e
+-   https://docs.opencv.org/4.x/db/df6/tutorial_erosion_dilatation.html
+-   https://docs.opencv.org/4.x/d3/dbe/tutorial_opening_closing_hats.html
+-   https://medium.com/nattadet-c/morphological-filters-d99860d39b85
+-
+
 ### Sunglasses
 
 > Kernel size of 5 on morph_close did not produce any changes to the black spots present in sunglasses_1
@@ -89,3 +95,8 @@ kernel size 15
 ![pen_2](img/task_2/pen_2.png)
 
 ## Segment into regions
+
+value 70
+kernel size 15
+min area 250
+![sunglasses_4](img/task_3/sunglasses_4.png)
