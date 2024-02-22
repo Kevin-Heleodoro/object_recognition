@@ -8,9 +8,9 @@ Options for thresholding values:
 -   Otsu's method - minimizes intra-class variance
 -   Adaptive thresholding - calculates locally for different regions of the image.
 
-https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html
-https://docs.opencv.org/4.x/db/d8e/tutorial_threshold.html
-https://docs.opencv.org/4.x/da/d97/tutorial_threshold_inRange.html
+-   https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html
+-   https://docs.opencv.org/4.x/db/d8e/tutorial_threshold.html
+-   https://docs.opencv.org/4.x/da/d97/tutorial_threshold_inRange.html
 
 > Compare the result if applying a gaussian blur to the image. How much of a benefit does it provide?
 
@@ -94,9 +94,31 @@ value 70
 kernel size 15
 ![pen_2](img/task_2/pen_2.png)
 
-## Segment into regions
+## Task 3
+
+Segment into regions
+
+-   Use the built-in `connectedComponentsWithStats` function to determine the regions within the image.
+
+-   https://docs.opencv.org/4.x/d2/dbd/tutorial_distance_transform.html
+
+### Sunglasses
 
 value 70
 kernel size 15
 min area 250
 ![sunglasses_4](img/task_3/sunglasses_4.png)
+
+### Fork
+
+value 126
+kernel size 3
+min area 250
+![fork_4](img/task_3/fork_4.png)
+
+### Pen
+
+value 91
+kernel size 6
+min area 250
+![pen_3](img/task_3/pen_3.png)

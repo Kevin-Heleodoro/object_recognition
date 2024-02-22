@@ -10,14 +10,8 @@
 #ifndef OBJECT_UTILS_H
 #define OBJECT_UTILS_H
 
-// void thresholdDemo(int, void *);
-
-// void morphologicalFilter(cv::Mat &img, int operation, int kernelSize);
-
 int imageThresholding(std::string imgPath);
 
 int videoThresholding();
-
-// int customThreshold(const cv::Mat &src, cv::Mat &dst, double threshValue);
 
 #endif
