@@ -122,3 +122,28 @@ value 91
 kernel size 6
 min area 250
 ![pen_3](img/task_3/pen_3.png)
+
+## Task 4
+
+Compute features for a region
+
+-   Calculate the least central moment and oriented bounding box
+-   percent filled
+-   bounding box
+-   https://docs.opencv.org/4.x/d0/d49/tutorial_moments.html
+
+### Sunglasses
+
+![sunglasses_5](img/task_4/sunglasses_5.png)
+
+### Fork
+
+![fork_5](img/task_4/fork_5.png)
+
+### Pen
+
+![pen_4](img/task_4/pen_4.png)
+
+### Hand
+
+![hand_1](img/task_4/hand_1.png)
