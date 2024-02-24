@@ -32,7 +32,44 @@ const char *windowSegmentName = "Region Segmentation";
 const char *windowName = "Capture";
 
 bool trainingMode = false;
+bool classifyMode = false;
+
+std::vector<std::pair<std::string, std::vector<float>>> trainingSet;
+std::string dataset = "features.csv";
 /////////
+
+// Compare vector features to a set of features
+// Returns the index of the closest match
+int compareFeatures(const std::vector<float> &features,
+                    const std::vector<std::pair<std::string, std::vector<float>>> &trainingSet)
+{
+    int closestMatch = -1;
+    float minDistance = std::numeric_limits<float>::max();
+
+    for (int i = 0; i < trainingSet.size(); i++)
+    {
+        float distance = 0;
+        for (int j = 0; j < features.size(); j++)
+        {
+            distance += (features[j] - trainingSet[i].second[j]) * (features[j] - trainingSet[i].second[j]);
+        }
+        distance = std::sqrt(distance);
+        if (distance < minDistance)
+        {
+            printf("Distance for %s: %f\n", trainingSet[i].first.c_str(), distance);
+            minDistance = distance;
+            closestMatch = i;
+        }
+    }
+
+    if (minDistance > 1000)
+    {
+        printf("No match found\n");
+        return -1;
+    }
+
+    return closestMatch;
+}
 
 cv::RotatedRect calcFeatures(const cv::Mat &regionMap, const cv::Mat &stats, int regionId)
 {
@@ -47,12 +84,6 @@ cv::RotatedRect calcFeatures(const cv::Mat &regionMap, const cv::Mat &stats, int
     std::vector<cv::Point> points;
     cv::findNonZero(mask, points);
     cv::RotatedRect box = cv::minAreaRect(points);
-    printf("Centroid: (%f, %f)\n", centroid.x, centroid.y);
-    printf("Width: %d, Height: %d\n", width, height);
-    printf("Angle: %f\n", box.angle);
-    printf("Area: %f\n", m.m00);
-    printf("Bounding Box: (%f, %f), (%f, %f)\n", box.size.width, box.size.height, box.center.x, box.center.y);
-    // print
 
     return box;
 }
@@ -84,13 +115,54 @@ std::vector<float> calcFeatures(const cv::Mat &regionMap, int regionId)
         cv::Rect boundingBox = cv::boundingRect(contours[0]);
         float aspectRatio = static_cast<float>(boundingBox.width) / boundingBox.height;
         features.push_back(aspectRatio);
+
+        double largestArea = 0;
+        for (const auto &contour : contours)
+        {
+            double area = cv::contourArea(contour);
+            if (area > largestArea)
+            {
+                largestArea = area;
+            }
+        }
+        features.push_back(largestArea);
     }
     else
     {
         features.push_back(0);
+        features.push_back(0);
     }
 
     return features;
+}
+
+std::vector<std::pair<std::string, std::vector<float>>> loadTrainingSet(const std::string &filename)
+{
+    std::vector<std::pair<std::string, std::vector<float>>> featureVectors;
+    std::ifstream file(filename);
+    std::string line;
+    printf("Loading training set from %s\n", filename.c_str());
+
+    while (std::getline(file, line))
+    {
+        std::stringstream ss(line);
+        std::string item;
+        std::vector<float> vector;
+        std::string filename;
+        std::getline(ss, filename, ',');
+
+        while (std::getline(ss, item, ','))
+        {
+            vector.push_back(std::stof(item));
+        }
+
+        featureVectors.emplace_back(filename, vector);
+    }
+    file.close();
+    printf("Loaded features: %s\n", featureVectors.at(0).first.c_str());
+    printf("Loaded %lu feature vectors\n", featureVectors.size());
+
+    return featureVectors;
 }
 
 void saveFeatures(const std::string &label, const std::vector<float> &features, const std::string &filename)
@@ -121,9 +193,10 @@ void labelAndSaveFeatures(const cv::Mat &regionMap, int regionId, const std::str
 
     auto features = calcFeatures(regionMap, regionId);
     saveFeatures(label, features, filename);
+    trainingSet = loadTrainingSet(dataset);
 }
 
-void drawFeatures(cv::Mat &src, const std::vector<cv::RotatedRect> &boxes)
+void drawFeatures(cv::Mat &src, const std::vector<cv::RotatedRect> &boxes, std::string result = "")
 {
     for (auto box : boxes)
     {
@@ -133,7 +206,20 @@ void drawFeatures(cv::Mat &src, const std::vector<cv::RotatedRect> &boxes)
         {
             cv::line(src, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
         }
+
+        float maxY = vertices[0].y;
+        for (int i = 1; i < 4; i++)
+        {
+            if (vertices[i].y > maxY)
+            {
+                maxY = vertices[i].y;
+            }
+        }
+
+        cv::putText(src, result, cv::Point(vertices[0].x, maxY + 25), cv::FONT_HERSHEY_SIMPLEX, 0.6,
+                    cv::Scalar(0, 255, 0), 2);
     }
+
     // cv::imshow("Features", src);
 }
 
@@ -147,7 +233,7 @@ void morphologicalFilter(cv::Mat &img, int operation, int kernelSize)
     cv::morphologyEx(img, img, operation, element);
 }
 
-void segmentedRegions(const cv::Mat &img, bool trainingMode = false)
+void segmentedRegions(const cv::Mat &img, bool isTraining = false, bool isClassify = false)
 {
     // Ensure img has been tresholded
     cv::Mat labels, stats, centroids;
@@ -183,49 +269,42 @@ void segmentedRegions(const cv::Mat &img, bool trainingMode = false)
     {
         for (int j = 0; j < labels.cols; j++)
         {
-            // only paint the region if it is within the boxes array
-
-            // ###
-            // for (auto box : boxes)
-            // {
-            //     cv::Point2f vertices[4];
-            //     box.points(vertices);
-            //     std::vector<cv::Point2f> points(vertices, vertices + 4); // Convert array to vector
-            //     cv::Point2f point(j, i);
-            //     if (cv::pointPolygonTest(points, point, false) >= 0) // Use the vector of points
-            //     {
-            //         cv::Vec3b &pixel = output.at<cv::Vec3b>(i, j);
-            //         pixel = colors[labels.at<int>(i, j)];
-            //     }
-            // }
-            // ###
-
-            // Check is pixel is within the boxes
-
             int label = labels.at<int>(i, j);
             cv::Vec3b &pixel = output.at<cv::Vec3b>(i, j);
             pixel = colors[label];
         }
     }
 
-    // Filter out small regions
-    // for (int i = 1; i < nLabels; i++)
-    // {
-    //     if (stats.at<int>(i, cv::CC_STAT_AREA) < MIN_AREA)
-    //         continue;
+    // drawFeatures(output, boxes);
 
-    //     int left = stats.at<int>(i, cv::CC_STAT_LEFT);
-    //     int top = stats.at<int>(i, cv::CC_STAT_TOP);
-    //     int width = stats.at<int>(i, cv::CC_STAT_WIDTH);
-    //     int height = stats.at<int>(i, cv::CC_STAT_HEIGHT);
-    // }
-
-    drawFeatures(output, boxes);
-
-    if (trainingMode)
+    if (isTraining)
     {
         labelAndSaveFeatures(labels, 1, "features.csv");
     }
+    // if (isClassify)
+    // {
+    // printf("Classifying object ...\n");
+    int closestMatch = compareFeatures(calcFeatures(labels, 1), trainingSet);
+    std::string result;
+
+    if (closestMatch == -1)
+    {
+        // std::cout << "No match found" << std::endl;
+        result = "No match found";
+    }
+    else
+    {
+        result = trainingSet[closestMatch].first;
+    }
+
+    // std::cout << "Closest match: " << result << std::endl;
+
+    // add label to the image
+    // cv::putText(output, result, cv::Point(50, 50), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+    drawFeatures(output, boxes, result);
+
+    // classifyMode = false;
+    // }
 
     // Display the result
     cv::imshow(windowSegmentName, output);
@@ -245,7 +324,7 @@ void thresholdDemo(int, void *)
     // Apply morphological closing to fill in gaps
     morphologicalFilter(dst, cv::MORPH_CLOSE, currentTrackbarMorphKernel);
 
-    segmentedRegions(dst, trainingMode);
+    segmentedRegions(dst, trainingMode, classifyMode);
 
     // Display the result
     // cv::imshow(windowDetectName, dst);
@@ -296,9 +375,12 @@ int videoThresholding()
         return -1;
     }
 
+    // Load vectors from file
+    trainingSet = loadTrainingSet(dataset);
+
     // Create the input and output windows
     namedWindow(windowName, cv::WINDOW_AUTOSIZE);
-    namedWindow(windowDetectName, cv::WINDOW_AUTOSIZE);
+    // namedWindow(windowDetectName, cv::WINDOW_AUTOSIZE);
 
     // Create Trackbar to choose Morph Kernel size
     createTrackbar(morphKernel, windowName, NULL, maxMorphKernelSize, thresholdDemo);
@@ -334,6 +416,11 @@ int videoThresholding()
         {
             std::cout << "Training Mode entered..." << std::endl;
             trainingMode = !trainingMode;
+        }
+        if (key == 'c' || key == 'C')
+        {
+            std::cout << "Attempting to classify object ..." << std::endl;
+            classifyMode = !classifyMode;
         }
     }
     return 0;
