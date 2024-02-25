@@ -1,3 +1,7 @@
+Author: Kevin Heleodoro
+Date: February 24, 2024
+Purpose: Notes on Project 3 for CS 5530
+
 ## Task 1:
 
 Options for thresholding values:
@@ -101,6 +105,7 @@ Segment into regions
 -   Use the built-in `connectedComponentsWithStats` function to determine the regions within the image.
 
 -   https://docs.opencv.org/4.x/d2/dbd/tutorial_distance_transform.html
+-   https://docs.opencv.org/3.4/d3/dc0/group__imgproc__shape.html#ga107a78bf7cd25dec05fb4dfc5c9e765f
 
 ### Sunglasses
 

@@ -3,6 +3,7 @@
 // Purpose: A collection of utils used for object recognition
 
 #include <fstream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,7 @@ cv::Mat gray;
 cv::Mat dst;
 
 int threshValue = 0;
+int threshType = 1; // Binary Inverted threshold
 int const maxVal = 255;
 int const maxBinaryValue = 255;
 const char *trackbarValue = "Value";
@@ -23,8 +25,7 @@ int morphKernelSize = 1;
 int maxMorphKernelSize = 25;
 const char *morphKernel = "Morph Kernel";
 
-int threshType = 1; // Binary Inverted threshold
-
+int k = 6;
 int MIN_AREA = 300;
 
 const char *windowDetectName = "Object Detection";
@@ -36,10 +37,17 @@ bool classifyMode = false;
 
 std::vector<std::pair<std::string, std::vector<float>>> trainingSet;
 std::string dataset = "features.csv";
+
 /////////
 
-// Compare vector features to a set of features
-// Returns the index of the closest match
+/**
+ * @brief Compares the features of a region to the features of the training set. This is done by calculating the
+ * euclidean distance between the features of the region and the features of each training set entry.
+ *
+ * @param features The features of the region to compare
+ * @param trainingSet The training set
+ * @return int The index of the closest match in the training set
+ */
 int compareFeatures(const std::vector<float> &features,
                     const std::vector<std::pair<std::string, std::vector<float>>> &trainingSet)
 {
@@ -56,7 +64,6 @@ int compareFeatures(const std::vector<float> &features,
         distance = std::sqrt(distance);
         if (distance < minDistance)
         {
-            printf("Distance for %s: %f\n", trainingSet[i].first.c_str(), distance);
             minDistance = distance;
             closestMatch = i;
         }
@@ -71,6 +78,61 @@ int compareFeatures(const std::vector<float> &features,
     return closestMatch;
 }
 
+/**
+ * @brief Compares the features of a region to the features of the training set. This is done by calculating the
+ * euclidean distance between the features of the region and the features of each training set entry. This version
+ * uses the k-nearest neighbors algorithm to classify the region.
+ *
+ * @param features The features of the region to compare
+ * @param trainingSet The training set
+ * @param k The number of neighbors to consider
+ * @return std::string The label of the closest match in the training set
+ */
+std::string compareKNearest(const std::vector<float> &features,
+                            const std::vector<std::pair<std::string, std::vector<float>>> &trainingSet, int k = 6)
+{
+    std::vector<std::pair<float, int>> distances;
+    for (int i = 0; i < trainingSet.size(); i++)
+    {
+        float distance = 0;
+        for (int j = 0; j < features.size(); j++)
+        {
+            distance += (features[j] - trainingSet[i].second[j]) * (features[j] - trainingSet[i].second[j]);
+        }
+        distance = std::sqrt(distance);
+        distances.push_back(std::make_pair(distance, i));
+    }
+
+    std::sort(distances.begin(), distances.end());
+    std::map<std::string, int> labels;
+    for (int i = 0; i < k; i++)
+    {
+        labels[trainingSet[distances[i].second].first]++;
+    }
+
+    int max = 0;
+    std::string result;
+    for (auto &label : labels)
+    {
+        if (label.second > max)
+        {
+            max = label.second;
+            result = label.first;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * @brief Calculates the features of a region. The features are the area, centroid, aspect ratio, and largest area
+ * of the region.
+ *
+ * @param regionMap The region map
+ * @param stats The statistics of the region map
+ * @param regionId The id of the region
+ * @return cv::RotatedRect The features of the region
+ */
 cv::RotatedRect calcFeatures(const cv::Mat &regionMap, const cv::Mat &stats, int regionId)
 {
     int x = stats.at<int>(regionId, cv::CC_STAT_LEFT);
@@ -88,7 +150,14 @@ cv::RotatedRect calcFeatures(const cv::Mat &regionMap, const cv::Mat &stats, int
     return box;
 }
 
-// calculates area, coordinates of centroid, and aspect ratio
+/**
+ * @brief Calculates the features of a region. The features are the area, centroid, aspect ratio, and largest area
+ * of the region.
+ *
+ * @param regionMap The region map
+ * @param regionId The id of the region
+ * @return std::vector<float> The features of the region
+ */
 std::vector<float> calcFeatures(const cv::Mat &regionMap, int regionId)
 {
     std::vector<float> features;
@@ -116,6 +185,7 @@ std::vector<float> calcFeatures(const cv::Mat &regionMap, int regionId)
         float aspectRatio = static_cast<float>(boundingBox.width) / boundingBox.height;
         features.push_back(aspectRatio);
 
+        // Largest Area
         double largestArea = 0;
         for (const auto &contour : contours)
         {
@@ -136,6 +206,14 @@ std::vector<float> calcFeatures(const cv::Mat &regionMap, int regionId)
     return features;
 }
 
+/**
+ * @brief Loads the training set from a file. The training set is a list of feature vectors and their respective labels.
+ * The file is expected to be in the following format:
+ * label1,feature1,feature2,feature3,...,featureN
+ *
+ * @param filename The name of the file to load the training set from
+ * @return std::vector<std::pair<std::string, std::vector<float>>> The training set
+ */
 std::vector<std::pair<std::string, std::vector<float>>> loadTrainingSet(const std::string &filename)
 {
     std::vector<std::pair<std::string, std::vector<float>>> featureVectors;
@@ -165,6 +243,15 @@ std::vector<std::pair<std::string, std::vector<float>>> loadTrainingSet(const st
     return featureVectors;
 }
 
+/**
+ * @brief Saves the features of a region to a file. The features are the area, centroid, aspect ratio, and largest area
+ * of the region.
+ *
+ * @param label The label of the region
+ * @param features The features of the region
+ * @param filename The name of the file to save the features to
+ * @return void
+ */
 void saveFeatures(const std::string &label, const std::vector<float> &features, const std::string &filename)
 {
     std::ofstream file(filename, std::ios::app);
@@ -185,6 +272,14 @@ void saveFeatures(const std::string &label, const std::vector<float> &features, 
     trainingMode = false;
 }
 
+/**
+ * @brief Used to calculate the features of a region and save them to a file. The user is prompted to enter the label
+ * of the region.
+ *
+ * @param regionMap The region map
+ * @param regionId The id of the region
+ * @param filename The name of the file to save the features to
+ */
 void labelAndSaveFeatures(const cv::Mat &regionMap, int regionId, const std::string &filename)
 {
     std::string label;
@@ -196,6 +291,13 @@ void labelAndSaveFeatures(const cv::Mat &regionMap, int regionId, const std::str
     trainingSet = loadTrainingSet(dataset);
 }
 
+/**
+ * @brief Draws the bounding boxes of the regions and the label of the region on the image.
+ *
+ * @param src The source image
+ * @param boxes The bounding boxes of the regions
+ * @param result The label of the region
+ */
 void drawFeatures(cv::Mat &src, const std::vector<cv::RotatedRect> &boxes, std::string result = "")
 {
     for (auto box : boxes)
@@ -219,10 +321,15 @@ void drawFeatures(cv::Mat &src, const std::vector<cv::RotatedRect> &boxes, std::
         cv::putText(src, result, cv::Point(vertices[0].x, maxY + 25), cv::FONT_HERSHEY_SIMPLEX, 0.6,
                     cv::Scalar(0, 255, 0), 2);
     }
-
-    // cv::imshow("Features", src);
 }
 
+/**
+ * @brief Applies a morphological operation to an image.
+ *
+ * @param img The image to apply the operation to
+ * @param operation The morphological operation to apply
+ * @param kernelSize The size of the kernel to use
+ */
 void morphologicalFilter(cv::Mat &img, int operation, int kernelSize)
 {
     // Create the structuring element for the morphological operation
@@ -233,6 +340,14 @@ void morphologicalFilter(cv::Mat &img, int operation, int kernelSize)
     cv::morphologyEx(img, img, operation, element);
 }
 
+/**
+ * @brief Segments the regions of an image. The regions are painted with a random color and the features of each region
+ * are calculated and displayed on the image.
+ *
+ * @param img The image to segment
+ * @param isTraining Whether the function is being used in training mode
+ * @param isClassify Whether the function is being used in classification mode
+ */
 void segmentedRegions(const cv::Mat &img, bool isTraining = false, bool isClassify = false)
 {
     // Ensure img has been tresholded
@@ -275,61 +390,48 @@ void segmentedRegions(const cv::Mat &img, bool isTraining = false, bool isClassi
         }
     }
 
-    // drawFeatures(output, boxes);
-
     if (isTraining)
     {
         labelAndSaveFeatures(labels, 1, "features.csv");
     }
-    // if (isClassify)
-    // {
-    // printf("Classifying object ...\n");
-    int closestMatch = compareFeatures(calcFeatures(labels, 1), trainingSet);
-    std::string result;
 
-    if (closestMatch == -1)
-    {
-        // std::cout << "No match found" << std::endl;
-        result = "No match found";
-    }
-    else
-    {
-        result = trainingSet[closestMatch].first;
-    }
+    // Gets the label of the closest match in the training set
+    std::string result = compareKNearest(calcFeatures(labels, 1), trainingSet);
 
-    // std::cout << "Closest match: " << result << std::endl;
-
-    // add label to the image
-    // cv::putText(output, result, cv::Point(50, 50), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+    // add border and label to the image
     drawFeatures(output, boxes, result);
-
-    // classifyMode = false;
-    // }
 
     // Display the result
     cv::imshow(windowSegmentName, output);
 }
 
+/**
+ * @brief Callback function for the thresholding demo. This function is called whenever the trackbars are changed.
+ *
+ */
 void thresholdDemo(int, void *)
 {
+    // Get thresh and morph kernel values
     int currentTrackbarValue = cv::getTrackbarPos(trackbarValue, windowName);
     int currentTrackbarMorphKernel = cv::getTrackbarPos(morphKernel, windowName);
 
     cv::threshold(gray, dst, currentTrackbarValue, maxBinaryValue,
                   threshType); // Will need to make my own custom version eventually
 
-    // Apply morphological opening to reduce noise
-    // morphologicalFilter(dst, cv::MORPH_OPEN, currentTrackbarMorphKernel);
-
     // Apply morphological closing to fill in gaps
     morphologicalFilter(dst, cv::MORPH_CLOSE, currentTrackbarMorphKernel);
 
+    // Segment, classify, and display the regions
     segmentedRegions(dst, trainingMode, classifyMode);
-
-    // Display the result
-    // cv::imshow(windowDetectName, dst);
 }
 
+/**
+ * @brief Applies thresholding to an image. The user can choose the threshold value and the morphological kernel size
+ * using trackbars.
+ *
+ * @param imgPath The path to the image to apply thresholding to
+ * @return int
+ */
 int imageThresholding(std::string imgPath)
 {
     cv::Mat img = cv::imread(imgPath, cv::IMREAD_COLOR);
@@ -366,6 +468,12 @@ int imageThresholding(std::string imgPath)
     return 0;
 }
 
+/**
+ * @brief Applies thresholding to a video stream. The user can choose the threshold value and the morphological kernel
+ * size using trackbars.
+ *
+ * @return int
+ */
 int videoThresholding()
 {
     VideoCapture cap(0);
@@ -380,7 +488,6 @@ int videoThresholding()
 
     // Create the input and output windows
     namedWindow(windowName, cv::WINDOW_AUTOSIZE);
-    // namedWindow(windowDetectName, cv::WINDOW_AUTOSIZE);
 
     // Create Trackbar to choose Morph Kernel size
     createTrackbar(morphKernel, windowName, NULL, maxMorphKernelSize, thresholdDemo);
@@ -426,6 +533,13 @@ int videoThresholding()
     return 0;
 }
 
+/**
+ * @brief Applies thresholding to a video stream. The user passes in the threshold value.
+ *
+ * @param src The source image
+ * @param dst The destination image
+ * @param threshValue The threshold value
+ */
 int customThreshold(const cv::Mat &src, cv::Mat &dst, double threshValue)
 {
     // Convert to grayscale
